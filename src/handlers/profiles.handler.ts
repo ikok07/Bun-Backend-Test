@@ -1,5 +1,5 @@
 import {DatabaseService} from "../services/database.service.ts";
-import {profileInsertSchema, profilesTable, safeProfileSchema} from "../db/schemas/profiles.ts";
+import {type Profile, profileInsertSchema, profilesTable, safeProfileSchema} from "../db/schemas/profiles.ts";
 import {type Context} from "hono"
 import {successResponse} from "../utils/responses.utils.ts";
 import {HTTPException} from "hono/http-exception";
@@ -16,36 +16,12 @@ import {RedisService} from "../services/redis.service.ts";
 export class ProfilesHandler {
 
     static async getProfile(c: Context) {
-       try {
-           const token = c.req.header()["authorization"]?.split(' ')[1];
-           if (!token) throw new HTTPException(StatusCodes.UNAUTHORIZED, {message: "Unauthorized!"});
-           const {data: verifiedToken, error} = z.object({profileId: z.string()}).safeParse(JwtService.verifyToken(token));
-           if (error) throw new HTTPException(StatusCodes.UNAUTHORIZED, {message: "Unauthorized!"});
+        const profile: Profile = c.get("profile");
 
-           let profile: object | null = null
-           const cacheKey = `profile:${verifiedToken.profileId}`
-           const cachedProfile = await RedisService.instance().get(cacheKey);
+        const {data: safeProfile, error: safeProfileError} = safeProfileSchema.safeParse(profile);
+        if (safeProfileError) throw new Error("Could not parse profile into safe profile!");
 
-           if (cachedProfile) profile = JSON.parse(cachedProfile);
-           else {
-               const [dbProfile] = await DatabaseService.instance().select().from(profilesTable).where(eq(profilesTable.id, verifiedToken.profileId))
-               if (!dbProfile) throw new HTTPException(StatusCodes.NOT_FOUND, {message: "Profile not found!"});
-               profile = dbProfile;
-               await RedisService.instance().set(cacheKey, JSON.stringify(profile), "EX", 3600);
-           }
-
-           const {data: safeProfile, error: safeProfileError} = safeProfileSchema.safeParse(profile);
-           if (safeProfileError) throw new Error("Could not parse profile into safe profile!");
-
-           return successResponse(c, safeProfile);
-       } catch (e) {
-           if (e instanceof JsonWebTokenError) {
-               throw new HTTPException(StatusCodes.UNAUTHORIZED, {message: "Unauthorized!"});
-           } else {
-               console.error(e);
-               throw e;
-           }
-       }
+        return successResponse(c, safeProfile);
     }
 
     static async login(c: Context) {
