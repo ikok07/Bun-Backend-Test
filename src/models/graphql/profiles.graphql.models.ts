@@ -12,7 +12,7 @@ ProfileGraphQL.implement({
     }),
 });
 
-export const SignUpProfileGraphQL = (await GraphqlService.schemaBuilderInstance()).inputType("InsertProfile", {
+export const SignUpProfileGraphQL = (await GraphqlService.schemaBuilderInstance()).inputType("SignUp", {
     fields: (t) => ({
         name: t.string({required: true}),
         email: t.string({required: true}),
@@ -21,7 +21,16 @@ export const SignUpProfileGraphQL = (await GraphqlService.schemaBuilderInstance(
     }),
     validate: profileInsertSchema.omit({role: true})
 });
-export const SignUpProfileResponseGraphQL = (await GraphqlService.schemaBuilderInstance())
+
+export const LoginProfileGraphQL = (await GraphqlService.schemaBuilderInstance()).inputType("Login", {
+    fields: t => ({
+        email: t.string({required: true}),
+        password: t.string({required: true})
+    }),
+    validate: profileInsertSchema.omit({name: true, phone: true, role: true})
+});
+
+export const LoginProfileResponseGraphQL = (await GraphqlService.schemaBuilderInstance())
     .objectRef<{
         profile: Profile,
         token: string

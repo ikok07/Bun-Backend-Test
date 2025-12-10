@@ -1,0 +1,11 @@
+services:
+  cerbos:
+    image: cerbos/cerbos:0.49.0
+    container_name: cerbos
+    restart: unless-stopped
+    ports:
+      - 3592:3592
+      - 3593:3593
+    volumes:
+      - /Users/kok/WebstormProjects/bun-test/src/cerbos:/app
+    command: server --config=/app/config.yaml

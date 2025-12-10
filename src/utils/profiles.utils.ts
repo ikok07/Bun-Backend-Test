@@ -2,10 +2,10 @@ import {z} from "zod";
 import {JwtService} from "../services/jwt.service.ts";
 import {HTTPException} from "hono/http-exception";
 import {StatusCodes} from "http-status-codes";
-import {RedisService} from "../services/redis.service.ts";
 import {DatabaseService} from "../services/database.service.ts";
 import {type Profile, profilesTable} from "../db/schemas/profiles.ts";
 import {eq} from "drizzle-orm";
+import {GraphQLError} from "graphql";
 
 export async function getSessionProfile(token: string) {
     const {data: verifiedToken, error} = z.object({profileId: z.string()}).safeParse(JwtService.verifyToken(token));
@@ -24,4 +24,12 @@ export async function getSessionProfile(token: string) {
     // }
 
     return profile;
+}
+
+export function checkLoggedIn(profile: Profile | null) {
+    if (!profile) throw new GraphQLError("You must be logged in!!");
+}
+
+export function throwNoAccess(allowed: boolean) {
+    if (!allowed) throw new GraphQLError("You don't have access to this functionality!");
 }

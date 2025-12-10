@@ -4,9 +4,11 @@ import {errorResponse} from "./utils/responses.utils.ts";
 import {HTTPException} from "hono/http-exception";
 import {StatusCodes} from "http-status-codes";
 import {DatabaseService} from "./services/database.service.ts";
+import {CerbosService} from "./services/cerbos.service.ts";
 
 async function init() {
     if (!(await DatabaseService.healthcheck())) throw new Error("Database connection failed");
+    if (!(await CerbosService.healthcheck())) throw new Error("Cerbos connection failed");
     // if (!(await RedisService.healthcheck())) throw new Error("Redis connection failed");
 }
 

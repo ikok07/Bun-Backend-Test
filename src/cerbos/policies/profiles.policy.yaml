@@ -1,0 +1,18 @@
+apiVersion: api.cerbos.dev/v1
+resourcePolicy:
+  version: "default"
+  resource: "profiles"
+  rules:
+    - name: "allow_full_access_to_admins"
+      actions: ["select", "update"]
+      effect: EFFECT_ALLOW
+      roles:
+        - admin
+    - name: "allow_full_access_to_user_own_profile"
+      actions: ["select", "update"]
+      effect: EFFECT_ALLOW
+      roles:
+          - user
+      condition:
+        match:
+          expr: "request.resource.id == request.principal.id"

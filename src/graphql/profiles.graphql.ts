@@ -6,7 +6,7 @@ import {
 import {
     ProfileGraphQL,
     SignUpProfileGraphQL,
-    SignUpProfileResponseGraphQL, UpdateProfileGraphQL
+    LoginProfileResponseGraphQL, UpdateProfileGraphQL, LoginProfileGraphQL
 } from "../models/graphql/profiles.graphql.models.ts";
 import {DatabaseService} from "../services/database.service.ts";
 import {DrizzleQueryError, eq, inArray, SQL} from "drizzle-orm";
@@ -15,14 +15,16 @@ import {StatusCodes} from "http-status-codes";
 import {JwtService} from "../services/jwt.service.ts";
 import {getDbErrorCode} from "../utils/database.utils.ts";
 import {PostgresError} from "pg-error-enum";
-import {GraphQLError} from "graphql/error";
+import {GraphQLError} from "graphql";
+import {CerbosService} from "../services/cerbos.service.ts";
+import {checkLoggedIn, throwNoAccess} from "../utils/profiles.utils.ts";
 
 (await GraphqlService.schemaBuilderInstance()).queryFields((t) => (
     {
         currentProfile: t.field({
            type: ProfileGraphQL,
            resolve: async (_, args, ctx) => {
-               if (!ctx.profile) throw new Error("Not signed in!");
+               checkLoggedIn(ctx.profile);
                return ctx.profile;
            }
         }),
@@ -32,6 +34,8 @@ import {GraphQLError} from "graphql/error";
                 ids: t.arg.stringList({required: false})
             },
             resolve: async (_, {ids}, ctx) => {
+                checkLoggedIn(ctx.profile);
+
                 let conditions: SQL | null = null;
                 if (ids) conditions = inArray(profilesTable.id, ids);
 
@@ -39,6 +43,20 @@ import {GraphQLError} from "graphql/error";
                 let results: Profile[];
                 if (!conditions) results = await profilesQuery;
                 else results = await profilesQuery.where(conditions);
+
+                throwNoAccess(await CerbosService.checkMultiple({
+                    principal: {
+                        id: ctx.profile!.id,
+                        roles: [ctx.profile!.role]
+                    },
+                    resources: results.map(result => ({
+                        resource: {
+                            kind: "profiles",
+                            id: result.id
+                        },
+                        actions: ["select"]
+                    }))
+                }));
 
                 return results;
             }
@@ -49,7 +67,20 @@ import {GraphQLError} from "graphql/error";
                 profileId: t.arg.string({required: true})
             },
             resolve: async (_, {profileId}, ctx) => {
-                if (ctx.profile && ctx.profile.id === profileId) return ctx.profile;
+                checkLoggedIn(ctx.profile);
+                throwNoAccess(await CerbosService.instance().isAllowed({
+                    principal: {
+                        id: ctx.profile!.id,
+                        roles: [ctx.profile!.role]
+                    },
+                    resource: {
+                        kind: "profiles",
+                        id: profileId
+                    },
+                    action: "select"
+                }));
+
+                if (ctx.profile!.id === profileId) return ctx.profile;
 
                 const [profile] = await DatabaseService.instance().select().from(profilesTable).where(eq(profilesTable.id, profileId));
                 if (!profile) throw new Error("Profile not found!");
@@ -62,23 +93,47 @@ import {GraphQLError} from "graphql/error";
 
 (await GraphqlService.schemaBuilderInstance()).mutationFields((t) => ({
     signup: t.field({
-        type: SignUpProfileResponseGraphQL,
+        type: LoginProfileResponseGraphQL,
         args: {
-            insertData: t.arg({
+            data: t.arg({
                 type: SignUpProfileGraphQL,
                 required: true
             })
         },
-        resolve: async (_, {insertData}, ctx) => {
-            const hashedPassword = await Bun.password.hash(insertData.password, "bcrypt");
-            const [insertedProfile] = await DatabaseService.instance()
-                .insert(profilesTable)
-                .values({...insertData, password: hashedPassword, role: "user"})
-                .returning();
+        resolve: async (_, {data}, ctx) => {
+            try {
+                if (ctx.isAuthenticated) throw new GraphQLError("You are already signed in!");
+                const hashedPassword = await Bun.password.hash(data.password, "bcrypt");
+                const [insertedProfile] = await DatabaseService.instance()
+                    .insert(profilesTable)
+                    .values({...data, password: hashedPassword, role: "user"})
+                    .returning();
 
-            if (!insertedProfile) throw new HTTPException(StatusCodes.INTERNAL_SERVER_ERROR, {message: "Profile could not be created!"});
+                if (!insertedProfile) throw new HTTPException(StatusCodes.INTERNAL_SERVER_ERROR, {message: "Profile could not be created!"});
 
-            return {profile: insertedProfile, token: JwtService.generateToken({profileId: insertedProfile.id}, 60 * 60 * 24)};
+                return {profile: insertedProfile, token: JwtService.generateToken({profileId: insertedProfile.id}, 60 * 60 * 24)};
+            } catch (e) {
+                if (e instanceof DrizzleQueryError) {
+                    if (getDbErrorCode(e) === PostgresError.UNIQUE_VIOLATION) {
+                        throw new GraphQLError("Email already in use!");
+                    }
+                }
+                throw e;
+            }
+        }
+    }),
+    login: t.field({
+        type: LoginProfileResponseGraphQL,
+        args: {
+            data: t.arg({type: LoginProfileGraphQL, required: true})
+        },
+        resolve: async (_, {data}, ctx) => {
+            const [profile] = await DatabaseService.instance().select().from(profilesTable).where(eq(profilesTable.email, data.email));
+            if (!profile) throw new GraphQLError("Invalid email or password!");
+
+            if (!await Bun.password.verify(data.password, profile.password, "bcrypt")) throw new GraphQLError("Invalid email or password!");
+
+            return {profile, token: JwtService.generateToken({profileId: profile.id}, 60 * 60 * 24)}
         }
     }),
     updateProfile: t.field({
@@ -89,6 +144,20 @@ import {GraphQLError} from "graphql/error";
         },
         resolve: async (_, {profileId, updateData}, ctx) => {
             try {
+                checkLoggedIn(ctx.profile);
+
+                throwNoAccess(await CerbosService.instance().isAllowed({
+                    principal: {
+                        id: ctx.profile!.id,
+                        roles: [ctx.profile!.role],
+                    },
+                    resource: {
+                        kind: "profiles",
+                        id: profileId
+                    },
+                    action: "update"
+                }));
+
                 const [updatedProfile] = await DatabaseService
                     .instance()
                     .update(profilesTable)
@@ -103,6 +172,7 @@ import {GraphQLError} from "graphql/error";
                         throw new GraphQLError("Email already in use!");
                     }
                 }
+                throw e;
             }
         }
     })

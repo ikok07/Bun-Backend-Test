@@ -1,5 +1,7 @@
 {
   "dependencies": {
+    "@cerbos/core": "^0.25.2",
+    "@cerbos/grpc": "^0.23.5",
     "@graphql-yoga/plugin-response-cache": "^3.19.1",
     "@pothos/core": "^4.10.0",
     "@pothos/plugin-validation": "^4.2.0",

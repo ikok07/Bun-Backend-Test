@@ -4,7 +4,7 @@ import SchemaBuilder from "@pothos/core";
 import {type GraphQLContext, loadGraphQLFields} from "../graphql/fields.graphql.ts";
 import {getSessionProfile} from "../utils/profiles.utils.ts";
 import ValidationPlugin from "@pothos/plugin-validation";
-import {GraphQLError} from "graphql/error";
+import {GraphQLError} from "graphql";
 
 export class GraphqlService {
     private static cache = createInMemoryCache();
