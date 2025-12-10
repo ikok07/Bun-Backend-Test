@@ -2,9 +2,15 @@ import { drizzle } from "drizzle-orm/postgres-js";
 import {sql} from "drizzle-orm"
 import postgres from "postgres"
 
+import * as profilesSchema from "../db/schemas/profiles"
+
 export class DatabaseService {
     private static db: ReturnType<typeof drizzle> | null = null;
     private static sql: ReturnType<typeof postgres> | null = null;
+
+    public static schema = {
+        ...profilesSchema
+    }
 
     static async healthcheck() {
         try {
@@ -27,6 +33,7 @@ export class DatabaseService {
                 connect_timeout: 10 // seconds
             })
 
+            // @ts-ignore
             return drizzle(this.sql);
         }
 

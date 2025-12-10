@@ -18,7 +18,7 @@ export class RedisService {
         if (!this.client) {
             this.client = new RedisClient(process.env.REDIS_URL, {
                 connectionTimeout: 1000 * 10, // ms
-                idleTimeout: 1000 * 30, // ms
+                // idleTimeout: 1000 * 30, // ms
                 autoReconnect: true,
                 maxRetries: 5
             });

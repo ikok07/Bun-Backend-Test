@@ -14,11 +14,12 @@ export const profilesTable = pgTable("profiles", {
     role: profileRoles().notNull()
 });
 
-export const profileSchema = createSelectSchema(profilesTable);
+export const profileSchema = createSelectSchema(profilesTable, {
+    email: z.email()
+});
 export type Profile = z.infer<typeof profileSchema>;
 
-export const safeProfileSchema = profileSchema.omit({password: true});
-export type SafeProfile = z.infer<typeof safeProfileSchema>;
-
-export const profileInsertSchema = createInsertSchema(profilesTable);
+export const profileInsertSchema = createInsertSchema(profilesTable, {
+    email: z.email()
+});
 export type ProfileInsert = z.infer<typeof profileInsertSchema>;

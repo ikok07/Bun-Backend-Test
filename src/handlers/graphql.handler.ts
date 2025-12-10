@@ -5,6 +5,6 @@ import {GraphqlService} from "../services/graphql.service.ts";
 export class GraphqlHandler {
     static async graphql(c: Context) {
         const rawRequest = await cloneRawRequest(c.req);
-        return await GraphqlService.instance().handle(rawRequest, {});
+        return (await GraphqlService.instance()).handle(rawRequest);
     }
 }
